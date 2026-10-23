@@ -393,6 +393,9 @@ def main():
     ap.add_argument("--topic", default=os.environ.get("NTFY_TOPIC"))
     ap.add_argument("--once", action="store_true",
                     help="un solo controllo (per GitHub Actions o cron)")
+    ap.add_argument("--duration", type=float, default=0, metavar="MINUTI",
+                    help="continua a controllare per questi minuti (con gli intervalli "
+                         "normali) e poi esce: per GitHub Actions, un run ogni mezz'ora")
     ap.add_argument("--probe", action="store_true",
                     help="stampa cosa legge, salva screenshot, invia una notifica di prova, poi esce")
     ap.add_argument("--dates", default=",".join(TARGET_DATES),
@@ -423,7 +426,8 @@ def main():
         sys.exit("Manca il topic ntfy: imposta NTFY_TOPIC oppure usa --topic")
 
     state, fails, fail_alerted = {}, 0, False
-    if not args.once:
+    end_at = time.time() + args.duration * 60 if args.duration > 0 else None
+    if not args.once and end_at is None:
         try:
             notify(args.topic, "GTT monitor avviato",
                    "Il monitor degli slot GTT e' attivo. Se vedi questo messaggio, "
@@ -431,6 +435,8 @@ def main():
         except Exception as e:  # noqa: BLE001
             log(f"ATTENZIONE: notifica di avvio non inviata ({e})")
         log(f"monitor avviato, date cercate: {', '.join(targets)}, topic ntfy: {args.topic}")
+    elif end_at is not None:
+        log(f"run di {args.duration:g} minuti, date cercate: {', '.join(targets)}")
 
     while True:
         try:
@@ -462,6 +468,9 @@ def main():
         if args.once:
             return
         wait = seconds_until_next_check(now_rome())
+        if end_at is not None and time.time() + wait > end_at:
+            log("fine del run: il prossimo controllo e' oltre la durata prevista")
+            return
         log(f"prossimo controllo tra {int(wait)} s")
         time.sleep(wait)
 

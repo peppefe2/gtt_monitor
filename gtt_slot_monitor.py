@@ -71,6 +71,7 @@ JS_NODES = """
     role: el.getAttribute('role') || '',
     label: label,
     disabled: dis ? dis.getAttribute('aria-disabled') === 'true' : false,
+    tappable: el.hasAttribute('flt-tappable'),
   };
 })
 """
@@ -138,6 +139,17 @@ def read_nodes(page, url):
     return nodes
 
 
+def is_open(nodes):
+    """True se almeno un 'Trasporto Pubblico' e' selezionabile.
+
+    Verificato sulle pagine reali: un servizio bloccato e' role='img' senza
+    flt-tappable (disabled resta False, quindi NON va usato); uno selezionabile
+    (visto a Ivrea) e' role='button' con flt-tappable.
+    """
+    targets = [n for n in nodes if SERVICE_RE.search(n["label"])]
+    return any(n["role"] == "button" or n.get("tappable") for n in targets)
+
+
 def check_point(browser, name, url, probe=False):
     """True = 'Trasporto Pubblico' selezionabile, False = bloccato."""
     page = browser.new_page(viewport={"width": 1280, "height": 900}, locale="it-IT")
@@ -148,13 +160,13 @@ def check_point(browser, name, url, probe=False):
             print(f"\n=== {name}: {len(nodes)} nodi ===")
             for n in nodes:
                 if n["label"]:
-                    print(f"  role={n['role']!r:12} disabled={n['disabled']!s:5} "
+                    print(f"  role={n['role']!r:12} tappable={n['tappable']!s:5} "
                           f"label={n['label']!r}")
         targets = [n for n in nodes if SERVICE_RE.search(n["label"])]
         if not targets:
             raise RuntimeError(f"{name}: servizio 'Trasporto Pubblico' non trovato "
                                f"({len(nodes)} nodi letti)")
-        return any(not n["disabled"] for n in targets)
+        return is_open(nodes)
     finally:
         page.close()
 
